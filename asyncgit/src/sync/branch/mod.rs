@@ -284,9 +284,9 @@ pub fn branch_compare_upstream(
 
 /// Switch branch to given `branch_name`.
 ///
-/// Method will fail if there are conflicting changes between current and target branch. However,
-/// if files are not conflicting, they will remain in tree (e.g. tracked new file is not
-/// conflicting and therefore is kept in tree even after checkout).
+/// The checkout will fail if there are any uncommitted changes. The checkout would work
+/// with unconflicting changes(e.g. new untracked file), but the ``UncommittedChanges``
+/// error was added to have parity with the others checkout functions
 pub fn checkout_branch(
 	repo_path: &RepoPath,
 	branch_name: &str,
@@ -294,6 +294,15 @@ pub fn checkout_branch(
 	scope_time!("checkout_branch");
 
 	let repo = repo(repo_path)?;
+
+	if !repo
+		.statuses(Some(
+			git2::StatusOptions::new().include_ignored(false),
+		))?
+		.is_empty()
+	{
+		return Err(Error::UncommittedChanges);
+	}
 
 	let branch = repo.find_branch(branch_name, BranchType::Local)?;
 
