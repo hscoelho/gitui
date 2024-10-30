@@ -195,3 +195,12 @@ pub fn get_status(
 
 	Ok(res)
 }
+
+///
+pub fn has_uncommitted_changes(repo_path: &RepoPath) -> Result<bool> {
+	let repo = repo(repo_path)?;
+	let statuses = repo.statuses(Some(
+		git2::StatusOptions::new().include_ignored(false),
+	))?;
+	Ok(!statuses.is_empty())
+}

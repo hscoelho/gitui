@@ -10,7 +10,8 @@ use crate::{
 	error::{Error, Result},
 	sync::{
 		remotes::get_default_remote_for_push_in_repo,
-		repository::repo, utils::get_head_repo, CommitId,
+		repository::repo, status::has_uncommitted_changes,
+		utils::get_head_repo, CommitId,
 	},
 };
 use git2::{Branch, BranchType, Repository};
@@ -293,16 +294,11 @@ pub fn checkout_branch(
 ) -> Result<()> {
 	scope_time!("checkout_branch");
 
-	let repo = repo(repo_path)?;
-
-	if !repo
-		.statuses(Some(
-			git2::StatusOptions::new().include_ignored(false),
-		))?
-		.is_empty()
-	{
+	if has_uncommitted_changes(repo_path)? {
 		return Err(Error::UncommittedChanges);
 	}
+
+	let repo = repo(repo_path)?;
 
 	let branch = repo.find_branch(branch_name, BranchType::Local)?;
 
@@ -334,27 +330,21 @@ pub fn checkout_commit(
 ) -> Result<()> {
 	scope_time!("checkout_commit");
 
+	if has_uncommitted_changes(repo_path)? {
+		return Err(Error::UncommittedChanges);
+	}
+
 	let repo = repo(repo_path)?;
 	let cur_ref = repo.head()?;
-	let statuses = repo.statuses(Some(
-		git2::StatusOptions::new().include_ignored(false),
-	))?;
+	repo.set_head_detached(commit_hash.into())?;
 
-	if statuses.is_empty() {
-		repo.set_head_detached(commit_hash.into())?;
-
-		if let Err(e) = repo.checkout_head(Some(
-			git2::build::CheckoutBuilder::new().force(),
-		)) {
-			repo.set_head(
-				bytes2string(cur_ref.name_bytes())?.as_str(),
-			)?;
-			return Err(Error::Git(e));
-		}
-		Ok(())
-	} else {
-		Err(Error::UncommittedChanges)
+	if let Err(e) = repo.checkout_head(Some(
+		git2::build::CheckoutBuilder::new().force(),
+	)) {
+		repo.set_head(bytes2string(cur_ref.name_bytes())?.as_str())?;
+		return Err(Error::Git(e));
 	}
+	Ok(())
 }
 
 ///
@@ -364,17 +354,12 @@ pub fn checkout_remote_branch(
 ) -> Result<()> {
 	scope_time!("checkout_remote_branch");
 
-	let repo = repo(repo_path)?;
-	let cur_ref = repo.head()?;
-
-	if !repo
-		.statuses(Some(
-			git2::StatusOptions::new().include_ignored(false),
-		))?
-		.is_empty()
-	{
+	if has_uncommitted_changes(repo_path)? {
 		return Err(Error::UncommittedChanges);
 	}
+
+	let repo = repo(repo_path)?;
+	let cur_ref = repo.head()?;
 
 	let name = branch.name.find('/').map_or_else(
 		|| branch.name.clone(),
