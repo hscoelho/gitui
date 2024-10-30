@@ -741,7 +741,7 @@ mod tests_checkout {
 
 		stage_add_file(repo_path, Path::new(filename)).unwrap();
 
-		assert!(checkout_branch(repo_path, "test").is_ok());
+		assert!(checkout_branch(repo_path, "test").is_err());
 	}
 }
 
